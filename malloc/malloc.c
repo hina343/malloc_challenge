@@ -70,14 +70,15 @@ void my_initialize() {
   my_heap.dummy.next = NULL;
 }
 
+//--------------------------------------------------------------------------------------
 // my_malloc() is called every time an object is allocated.
 // |size| is guaranteed to be a multiple of 8 bytes and meets 8 <= |size| <=
 // 4000. You are not allowed to use any library functions other than
 // mmap_from_system() / munmap_to_system().
 void *my_malloc(size_t size) {
-  // free list（空き領域のリスト）の中で、最適な（＝一番サイズが小さいけど足りる）ブロックを探します
-  my_metadata_t *best = NULL;        // 最適な空きブロック
-  my_metadata_t *best_prev = NULL;   // そのひとつ前のブロック（リストから削除するために必要）
+  // free list（空き領域のリスト）の中で、最適（十分な大きさかつ一番サイズが小さい）領域を探します
+  my_metadata_t *best = NULL;        // 最適な空き領域のポインタ
+  my_metadata_t *best_prev = NULL;   // リストから削除するために、そのひとつ前の領域のポインタ
 
   // リストをたどるためのポインタ
   my_metadata_t *cur = my_heap.free_head;
@@ -100,7 +101,7 @@ void *my_malloc(size_t size) {
 
   // 最適なブロックが見つからなかった場合（＝free listに十分な空き領域がない）
   if (best == NULL) {
-    // 新しいページ（4096バイト）をOSから取得
+    // 新しいページ（4096バイト）をOSから取得（？）
     size_t buffer_size = 4096;
     my_metadata_t *new_block = (my_metadata_t *)mmap_from_system(buffer_size);
 
@@ -116,18 +117,18 @@ void *my_malloc(size_t size) {
   }
 
   // ブロックが見つかったので、ユーザーに返すポインタを計算
-  // メタデータのすぐ後ろが使えるメモリ領域
+  // メタデータのすぐ後ろ＝使えるメモリ領域
   void *ptr = best + 1;
 
   // 残りサイズを計算（今のブロックサイズから使う分を引いた残り）
   size_t remaining = best->size - size;
 
-  // free list からこのブロックを削除（もう使うので）
+  // 使うためにfree list からこのブロックを削除
   my_remove_from_free_list(best, best_prev);
 
   // もし残りサイズがメタデータ1個分より大きいなら、分割して再利用可能にする
   if (remaining > sizeof(my_metadata_t)) {
-    // 今のブロックはちょうど要求サイズに縮める
+    // 今の領域サイズを要求されたサイズに縮める
     best->size = size;
 
     // 残り部分のメモリを新しい free ブロックとして扱う
@@ -142,6 +143,7 @@ void *my_malloc(size_t size) {
   // 要求されたメモリ領域を返す
   return ptr;
 }
+//----------------------------------------------------------------------------------------
 
 // This is called every time an object is freed.  You are not allowed to
 // use any library functions other than mmap_from_system / munmap_to_system.
