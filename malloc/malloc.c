@@ -75,7 +75,7 @@ void my_initialize() {
 // 4000. You are not allowed to use any library functions other than
 // mmap_from_system() / munmap_to_system().
 void *my_malloc(size_t size) {
-  // free list（空き領域のリスト）の中で、最適 (充分なサイズがあり、一番サイズが小さい）ブロックを探します
+  // free list（空き領域のリスト）の中で、最適な（＝一番サイズが小さいけど足りる）ブロックを探します
   my_metadata_t *best = NULL;        // 最適な空きブロック
   my_metadata_t *best_prev = NULL;   // そのひとつ前のブロック（リストから削除するために必要）
 
@@ -140,39 +140,6 @@ void *my_malloc(size_t size) {
   }
 
   // 要求されたメモリ領域を返す
-  return ptr;
-}
-
-  // |ptr| is the beginning of the allocated object.
-  //
-  // ... | metadata | object | ...
-  //     ^          ^
-  //     metadata   ptr
-  void *ptr = metadata + 1;
-  size_t remaining_size = metadata->size - size;
-  // Remove the free slot from the free list.
-  my_remove_from_free_list(metadata, prev);
-
-  if (remaining_size > sizeof(my_metadata_t)) {
-    // Shrink the metadata for the allocated object
-    // to separate the rest of the region corresponding to remaining_size.
-    // If the remaining_size is not large enough to make a new metadata,
-    // this code path will not be taken and the region will be managed
-    // as a part of the allocated object.
-    metadata->size = size;
-    // Create a new metadata for the remaining free slot.
-    //
-    // ... | metadata | object | metadata | free slot | ...
-    //     ^          ^        ^
-    //     metadata   ptr      new_metadata
-    //                 <------><---------------------->
-    //                   size       remaining size
-    my_metadata_t *new_metadata = (my_metadata_t *)((char *)ptr + size);
-    new_metadata->size = remaining_size - sizeof(my_metadata_t);
-    new_metadata->next = NULL;
-    // Add the remaining free slot to the free list.
-    my_add_to_free_list(new_metadata);
-  }
   return ptr;
 }
 
