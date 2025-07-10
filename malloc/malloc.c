@@ -75,7 +75,7 @@ void my_initialize() {
 // 4000. You are not allowed to use any library functions other than
 // mmap_from_system() / munmap_to_system().
 void *my_malloc(size_t size) {
-  // free list（空き領域のリスト）の中で、最適な（＝一番サイズが小さいけど足りる）ブロックを探します
+  // free list（空き領域のリスト）の中で、最適 (充分なサイズがあり、一番サイズが小さい）ブロックを探します
   my_metadata_t *best = NULL;        // 最適な空きブロック
   my_metadata_t *best_prev = NULL;   // そのひとつ前のブロック（リストから削除するために必要）
 
