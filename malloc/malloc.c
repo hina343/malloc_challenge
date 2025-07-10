@@ -75,35 +75,73 @@ void my_initialize() {
 // 4000. You are not allowed to use any library functions other than
 // mmap_from_system() / munmap_to_system().
 void *my_malloc(size_t size) {
-  my_metadata_t *metadata = my_heap.free_head;
-  my_metadata_t *prev = NULL;
-  // First-fit: Find the first free slot the object fits.
-  // TODO: Update this logic to Best-fit!
-  while (metadata && metadata->size < size) {
-    prev = metadata;
-    metadata = metadata->next;
-  }
-  // now, metadata points to the first free slot
-  // and prev is the previous entry.
+  // free list（空き領域のリスト）の中で、最適な（＝一番サイズが小さいけど足りる）ブロックを探します
+  my_metadata_t *best = NULL;        // 最適な空きブロック
+  my_metadata_t *best_prev = NULL;   // そのひとつ前のブロック（リストから削除するために必要）
 
-  if (!metadata) {
-    // There was no free slot available. We need to request a new memory region
-    // from the system by calling mmap_from_system().
-    //
-    //     | metadata | free slot |
-    //     ^
-    //     metadata
-    //     <---------------------->
-    //            buffer_size
+  // リストをたどるためのポインタ
+  my_metadata_t *cur = my_heap.free_head;
+  my_metadata_t *prev = NULL;
+
+  // free list を先頭から最後まで走査
+  while (cur != NULL) {
+    // 今のブロックのサイズが要求サイズ以上であれば候補
+    if (cur->size >= size) {
+      // まだ候補がない、または今のブロックがこれまでで最小なら更新
+      if (best == NULL || cur->size < best->size) {
+        best = cur;
+        best_prev = prev;
+      }
+    }
+    // 次のブロックに進むため、現在を前のポインタとして記録し、次へ
+    prev = cur;
+    cur = cur->next;
+  }
+
+  // 最適なブロックが見つからなかった場合（＝free listに十分な空き領域がない）
+  if (best == NULL) {
+    // 新しいページ（4096バイト）をOSから取得
     size_t buffer_size = 4096;
-    my_metadata_t *metadata = (my_metadata_t *)mmap_from_system(buffer_size);
-    metadata->size = buffer_size - sizeof(my_metadata_t);
-    metadata->next = NULL;
-    // Add the memory region to the free list.
-    my_add_to_free_list(metadata);
-    // Now, try my_malloc() again. This should succeed.
+    my_metadata_t *new_block = (my_metadata_t *)mmap_from_system(buffer_size);
+
+    // 新しく確保したメモリ領域にサイズ情報を記録
+    new_block->size = buffer_size - sizeof(my_metadata_t); // メタデータを除いたサイズ
+    new_block->next = NULL;
+
+    // free list に追加
+    my_add_to_free_list(new_block);
+
+    // 再び my_malloc を呼び出してやり直す（再帰）
     return my_malloc(size);
   }
+
+  // ブロックが見つかったので、ユーザーに返すポインタを計算
+  // メタデータのすぐ後ろが使えるメモリ領域
+  void *ptr = best + 1;
+
+  // 残りサイズを計算（今のブロックサイズから使う分を引いた残り）
+  size_t remaining = best->size - size;
+
+  // free list からこのブロックを削除（もう使うので）
+  my_remove_from_free_list(best, best_prev);
+
+  // もし残りサイズがメタデータ1個分より大きいなら、分割して再利用可能にする
+  if (remaining > sizeof(my_metadata_t)) {
+    // 今のブロックはちょうど要求サイズに縮める
+    best->size = size;
+
+    // 残り部分のメモリを新しい free ブロックとして扱う
+    my_metadata_t *rest = (my_metadata_t *)((char *)ptr + size); // ptr を size バイト進める
+    rest->size = remaining - sizeof(my_metadata_t); // メタデータを引いた残りが使えるサイズ
+    rest->next = NULL;
+
+    // 残り部分を free list に戻す
+    my_add_to_free_list(rest);
+  }
+
+  // 要求されたメモリ領域を返す
+  return ptr;
+}
 
   // |ptr| is the beginning of the allocated object.
   //
